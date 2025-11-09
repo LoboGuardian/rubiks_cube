@@ -1,0 +1,307 @@
+# Rubik's Cube 3D - AI Assistant Instructions
+
+## Project Overview
+
+This is a **3D Rubik's Cube** implementation in Python using:
+- **OpenGL** for hardware-accelerated rendering (60+ FPS)
+- **MVC Architecture** (Model-View-Controller)
+- **Poetry** for dependency management
+
+### Project Goals
+- High-performance 3D visualization with realistic appearance
+- Clean, maintainable code following SOLID principles
+- Professional MVC architecture with zero coupling between layers
+- Testable components (Model is GUI-independent)
+
+## Architecture
+
+```
+rubiks_cube/
+├── cube_model.py       # MODEL: Pure business logic (no GUI dependencies)
+├── cube_renderer.py    # VIEW: OpenGL rendering
+├── rubiks_cube.py      # CONTROLLER: Event handling & coordination
+├── pyproject.toml      # Poetry dependencies
+└── .clinerules         # This file
+```
+
+### MVC Separation Rules
+
+**CRITICAL: Never violate MVC boundaries!**
+
+1. **Model (`cube_model.py`)**
+   - NO imports of OpenGL, pygame, or any GUI libraries
+   - Only numpy for mathematical operations
+   - Pure Python classes for cube logic
+   - Must be testable without rendering
+   - Classes: `Vector3`, `GridPosition`, `CubePiece`, `RubiksCubeModel`
+
+2. **View (`cube_renderer.py`)**
+   - OpenGL rendering only
+   - No business logic
+   - Receives data from Model, renders it
+   - Class: `OpenGLRenderer`
+
+3. **Controller (`rubiks_cube.py`)**
+   - Coordinates Model and View
+   - Handles user input (keyboard, mouse)
+   - Event loop (60 FPS)
+   - Class: `RubiksCubeApp`
+
+## Development Workflow
+
+### Always use Poetry
+
+```bash
+# Install dependencies
+poetry install
+
+# Run the application
+poetry run python rubiks_cube.py
+
+# Add a dependency
+poetry add <package>
+
+# Update lock file
+poetry lock
+```
+
+### Key Constants (cube_model.py)
+
+```python
+CUBE_SIZE = 0.95   # Size of each cube piece
+CUBE_GAP = 0.05    # Gap between pieces (small for realistic look)
+GRID_SIZE = 3      # 3x3x3 cube
+ROTATION_ANGLE = np.pi / 2  # 90° rotations
+```
+
+## Visual Appearance Guidelines
+
+### Realistic Rubik's Cube Look
+
+The cube should look like a **real Rubik's Cube** with:
+
+1. **Solid black plastic pieces** (not transparent)
+2. **Colored stickers** on outer faces only
+3. **Stickers are raised** slightly above black plastic (3D effect)
+4. **Stickers are inset** to ~88% of face size (black borders visible)
+5. **Tight gaps** between pieces (CUBE_GAP = 0.05)
+
+### Rendering Details (`cube_renderer.py`)
+
+- **ALL 6 faces** of each cube piece must be drawn (including internal black faces)
+- Colored faces: Draw black plastic base, then raised colored sticker on top
+- Black faces: Draw solid dark gray plastic
+- Sticker offset: `normal * 0.015` (raised above surface)
+- Sticker inset: `center + (vertices - center) * 0.88`
+- Border width: 2.5px black lines around stickers
+
+## Code Style & Conventions
+
+### General Rules
+
+1. **Type hints** on all function parameters and returns
+2. **Docstrings** for all classes and public methods
+3. **Comments** for complex algorithms (e.g., Rodrigues' formula)
+4. **Line length**: Keep under 100 characters when possible
+5. **Naming**:
+   - Classes: `PascalCase`
+   - Functions/variables: `snake_case`
+   - Constants: `UPPER_SNAKE_CASE`
+
+### Mathematical Precision
+
+- Use **Rodrigues' rotation formula** for axis-angle rotations
+- Never use Euler angles (gimbal lock issues)
+- All rotations use **numpy matrices** (3x3)
+- Positions are **Vector3** objects, converted to numpy when needed
+
+## Common Tasks
+
+### Adding a New Face Rotation
+
+1. Add to `FACE_NAMES` in `cube_model.py`
+2. Define rotation axis in `_get_rotation_axis()`
+3. Add keyboard binding in `rubiks_cube.py` → `_handle_keypress()`
+
+### Modifying Rendering
+
+1. Edit `cube_renderer.py` → `_draw_cube_face()` for face appearance
+2. Edit `_draw_cube_piece()` for piece-level changes
+3. Edit `_setup_lighting()` for lighting changes
+4. **Never** add rendering code to `cube_model.py`
+
+### Changing Colors
+
+Edit `FACE_COLORS` in `cube_model.py`:
+```python
+FACE_COLORS = [
+    COLORS['RED'],     # front
+    COLORS['ORANGE'],  # back
+    COLORS['BLUE'],    # right
+    COLORS['GREEN'],   # left
+    COLORS['WHITE'],   # up
+    COLORS['YELLOW']   # down
+]
+```
+
+## Testing
+
+### Manual Testing Checklist
+
+When making changes, verify:
+- ✅ All 6 faces have correct colors
+- ✅ Face rotations work correctly (F, B, R, L, U, D)
+- ✅ Mouse drag rotates view smoothly
+- ✅ Mouse wheel zoom works
+- ✅ Scramble (S) creates solvable state
+- ✅ Reset (Space) returns to solved state
+- ✅ Cube looks solid (not transparent)
+- ✅ Stickers are on outside surface
+- ✅ 60 FPS performance maintained
+
+### Unit Testing
+
+Model can be tested without GUI:
+```python
+from cube_model import RubiksCubeModel
+
+cube = RubiksCubeModel()
+cube.rotate_face('F')
+# Verify state changes
+```
+
+## Performance Requirements
+
+- **Target**: 60+ FPS at all times
+- **Frame time**: <16ms
+- **CPU usage**: <10% (GPU does rendering)
+- **Startup time**: <2 seconds
+
+### If Performance Degrades
+
+1. Check if backface culling is enabled (`GL_CULL_FACE`)
+2. Verify depth testing is on (`GL_DEPTH_TEST`)
+3. Ensure not drawing hidden faces unnecessarily
+4. Profile with: `poetry run python -m cProfile rubiks_cube.py`
+
+## OpenGL Best Practices
+
+1. **Enable depth testing** (already done)
+2. **Enable backface culling** (already done)
+3. **Use hardware Z-buffer** (GL_DEPTH_TEST)
+4. **Double buffering** for smooth rendering
+5. **Disable lighting** when drawing lines/borders
+6. **Re-enable lighting** after drawing decorations
+
+## Common Pitfalls to Avoid
+
+### ❌ DON'T
+
+1. **Don't import pygame/OpenGL in cube_model.py** (breaks MVC)
+2. **Don't skip drawing black faces** (makes cube transparent)
+3. **Don't use Euler angles** (use rotation matrices)
+4. **Don't forget to call `poetry run`** when testing
+5. **Don't draw stickers inset into cube** (they should be raised)
+
+### ✅ DO
+
+1. **Always use poetry for dependency management**
+2. **Draw ALL 6 faces of each cube piece**
+3. **Raise stickers above black plastic** (realistic 3D effect)
+4. **Keep Model, View, Controller strictly separated**
+5. **Test with `poetry run python rubiks_cube.py`**
+
+## Dependencies
+
+Current dependencies (pyproject.toml):
+```toml
+numpy>=2.3.4,<3.0.0          # Mathematical operations
+PyOpenGL>=3.1.0              # OpenGL bindings
+PyOpenGL-accelerate>=3.1.0   # Hardware acceleration
+pygame-ce>=2.5.0             # Window & event handling
+```
+
+### Why These Dependencies?
+
+- **numpy**: Vector/matrix math for 3D transformations
+- **PyOpenGL**: Hardware-accelerated rendering (60+ FPS)
+- **PyOpenGL-accelerate**: C-accelerated OpenGL operations
+- **pygame-ce**: Community edition of pygame (modern fork)
+
+## Troubleshooting
+
+### Issue: Cube looks transparent
+**Solution**: Ensure `_draw_cube_piece()` draws ALL faces, not just colored ones
+
+### Issue: Stickers on wrong side
+**Solution**: Check normal calculation in `_draw_cube_face()` - should point outward
+
+### Issue: Module not found errors
+**Solution**: Run `poetry install` then use `poetry run python ...`
+
+### Issue: Low FPS
+**Solution**: Check GL_DEPTH_TEST and GL_CULL_FACE are enabled
+
+## Git Workflow
+
+### Commit Messages
+
+Use **Conventional Commits** format:
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+Types: `feat`, `fix`, `refactor`, `docs`, `style`, `perf`, `test`
+
+### Before Committing
+
+1. Test the application: `poetry run python rubiks_cube.py`
+2. Verify all rotations work (F, B, R, L, U, D, S, Space)
+3. Check visual appearance (solid cube, raised stickers)
+4. Ensure 60 FPS performance
+
+## Future Enhancements
+
+If asked to add features, consider:
+
+1. **Solver Algorithm**: A* or Kociemba's algorithm
+2. **Move Animation**: Smooth transitions between rotations
+3. **Move History**: Track and undo moves
+4. **Timer**: Speedsolving timer with statistics
+5. **Themes**: Customizable color schemes
+6. **GLSL Shaders**: Advanced lighting effects
+
+### When Adding Features
+
+- Keep MVC separation intact
+- Add to Model first (if logic change)
+- Then update View (if visual change)
+- Finally update Controller (if new controls)
+- Update this file with new instructions
+
+## Questions to Ask User
+
+Before making major changes:
+
+1. "Should this change affect the Model, View, or Controller?"
+2. "Does this maintain MVC separation?"
+3. "Will this affect performance?"
+4. "Do we need to update dependencies?"
+
+## Contact
+
+- **Project**: Rubik's Cube 3D Interactive Visualization
+- **Author**: LoboGuardian
+- **License**: MIT
+- **Python**: 3.14+
+- **Architecture**: MVC with OpenGL rendering
+
+---
+
+**Remember**: This is a showcase of professional software architecture. Maintain code quality, performance, and the clean MVC separation at all times.

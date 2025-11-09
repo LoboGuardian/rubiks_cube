@@ -410,6 +410,10 @@ Contributions welcome! Areas for improvement:
 - Unit tests
 - Documentation
 
+**For Contributors**: See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
+
+**For AI Assistants**: See [.clinerules](.clinerules) and [.ai-quickref.md](.ai-quickref.md) for detailed instructions on working with this codebase
+
 ## 📜 License
 
 MIT License - See LICENSE file

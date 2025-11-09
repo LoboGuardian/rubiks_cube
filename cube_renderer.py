@@ -119,39 +119,77 @@ class OpenGLRenderer:
         b = int(hex_color[4:6], 16) / 255.0
         return (r, g, b)
 
-    def _draw_cube_face(self, vertices: np.ndarray, color: str):
+    def _draw_cube_face(self, vertices: np.ndarray, color: str, is_sticker: bool = True):
         """
-        Draw a single cube face as a quad
+        Draw a single cube face as a quad with realistic appearance
 
         Args:
             vertices: 4 vertices of the face
             color: Hex color string
+            is_sticker: If True, draw as colored sticker on black base
         """
         # Convert color
         r, g, b = self._hex_to_rgb(color)
 
-        # Set color
-        glColor3f(r, g, b)
+        if is_sticker:
+            # Draw black plastic base
+            glColor3f(0.15, 0.15, 0.15)
+            glBegin(GL_QUADS)
+            for vertex in vertices:
+                glVertex3fv(vertex)
+            glEnd()
 
-        # Draw quad
-        glBegin(GL_QUADS)
-        for vertex in vertices:
-            glVertex3fv(vertex)
-        glEnd()
+            # Calculate face center and normal (pointing outward)
+            center = np.mean(vertices, axis=0)
+            v1 = vertices[1] - vertices[0]
+            v2 = vertices[2] - vertices[0]
+            normal = np.cross(v1, v2)
+            normal = normal / np.linalg.norm(normal)
 
-        # Draw black edges for definition
-        glDisable(GL_LIGHTING)
-        glColor3f(0.0, 0.0, 0.0)
-        glLineWidth(2.5)
-        glBegin(GL_LINE_LOOP)
-        for vertex in vertices:
-            glVertex3fv(vertex)
-        glEnd()
-        glEnable(GL_LIGHTING)
+            # Make sticker smaller (inset from edges) - 88% of face size
+            inset_vertices = center + (vertices - center) * 0.88
+
+            # Raise sticker slightly above black plastic surface
+            # This creates the 3D sticker effect
+            sticker_vertices = inset_vertices + normal * 0.015
+
+            # Draw colored sticker (slightly raised)
+            glColor3f(r, g, b)
+            glBegin(GL_QUADS)
+            for vertex in sticker_vertices:
+                glVertex3fv(vertex)
+            glEnd()
+
+            # Draw thin black border around sticker
+            glDisable(GL_LIGHTING)
+            glColor3f(0.0, 0.0, 0.0)
+            glLineWidth(2.5)
+            glBegin(GL_LINE_LOOP)
+            for vertex in sticker_vertices:
+                glVertex3fv(vertex)
+            glEnd()
+            glEnable(GL_LIGHTING)
+        else:
+            # Draw solid black plastic face (internal/hidden face)
+            glColor3f(0.15, 0.15, 0.15)
+            glBegin(GL_QUADS)
+            for vertex in vertices:
+                glVertex3fv(vertex)
+            glEnd()
+
+            # Draw darker edges for definition
+            glDisable(GL_LIGHTING)
+            glColor3f(0.05, 0.05, 0.05)
+            glLineWidth(1.5)
+            glBegin(GL_LINE_LOOP)
+            for vertex in vertices:
+                glVertex3fv(vertex)
+            glEnd()
+            glEnable(GL_LIGHTING)
 
     def _draw_cube_piece(self, piece: CubePiece):
         """
-        Draw a single cube piece with all its faces
+        Draw a single cube piece with all its faces (realistic solid cube)
 
         Args:
             piece: CubePiece object to render
@@ -169,13 +207,14 @@ class OpenGLRenderer:
             ([0, 1, 2, 3], 5)   # back (z-)
         ]
 
+        # Draw ALL faces to create a solid cube
         for indices, color_idx in faces:
             face_vertices = vertices[indices]
             color = piece.colors[color_idx]
 
-            # Only draw non-black faces (visible faces)
-            if color != COLORS['BLACK']:
-                self._draw_cube_face(face_vertices, color)
+            # Colored faces get sticker treatment, black faces are solid plastic
+            is_sticker = (color != COLORS['BLACK'])
+            self._draw_cube_face(face_vertices, color, is_sticker)
 
     def render(self, pieces: List[CubePiece]):
         """

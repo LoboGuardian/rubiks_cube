@@ -7,8 +7,8 @@ from typing import List, Dict
 import random
 
 # Constants
-CUBE_SIZE = 0.90
-CUBE_GAP = 0.12
+CUBE_SIZE = 0.95  # Slightly larger pieces
+CUBE_GAP = 0.05   # Smaller gap for realistic appearance
 GRID_SIZE = 3
 ROTATION_ANGLE = np.pi / 2
 
