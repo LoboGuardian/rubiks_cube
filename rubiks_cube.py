@@ -33,6 +33,13 @@ class RubiksCubeApp:
         print("Creating cube model...")
         self.model = RubiksCubeModel()
 
+        # Validate color assignment (colors only on outer faces)
+        print("Validating color placement...")
+        if self.model.validate_colors():
+            print("✓ Colors correctly placed on outer faces only")
+        else:
+            print("⚠ WARNING: Color placement validation failed!")
+
         # Initialize Renderer
         print("Creating renderer (hardware accelerated)...")
         self.renderer = OpenGLRenderer(width=1200, height=800)

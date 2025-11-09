@@ -95,18 +95,36 @@ class CubePiece:
         )
 
     def _initialize_colors(self) -> List[str]:
-        """Initialize face colors based on position
+        """
+        Initialize face colors based on position in the cube.
+        ONLY outer boundary faces get colored stickers.
         Returns colors in order: right, left, up, down, front, back
+
+        Grid coordinates:
+        - x: 0 (left), 1 (middle), 2 (right)
+        - y: 0 (down), 1 (middle), 2 (up)
+        - z: 0 (back), 1 (middle), 2 (front)
         """
         colors = []
         x, y, z = self.grid_position.x, self.grid_position.y, self.grid_position.z
 
-        colors.append(FACE_COLORS[2] if x == 2 else COLORS['BLACK'])  # right
-        colors.append(FACE_COLORS[3] if x == 0 else COLORS['BLACK'])  # left
-        colors.append(FACE_COLORS[4] if y == 2 else COLORS['BLACK'])  # up
-        colors.append(FACE_COLORS[5] if y == 0 else COLORS['BLACK'])  # down
-        colors.append(FACE_COLORS[0] if z == 2 else COLORS['BLACK'])  # front
-        colors.append(FACE_COLORS[1] if z == 0 else COLORS['BLACK'])  # back
+        # RIGHT face (+X): Only pieces with x=2 get blue sticker on right face
+        colors.append(FACE_COLORS[2] if x == 2 else COLORS['BLACK'])
+
+        # LEFT face (-X): Only pieces with x=0 get green sticker on left face
+        colors.append(FACE_COLORS[3] if x == 0 else COLORS['BLACK'])
+
+        # UP face (+Y): Only pieces with y=2 get white sticker on top face
+        colors.append(FACE_COLORS[4] if y == 2 else COLORS['BLACK'])
+
+        # DOWN face (-Y): Only pieces with y=0 get yellow sticker on bottom face
+        colors.append(FACE_COLORS[5] if y == 0 else COLORS['BLACK'])
+
+        # FRONT face (+Z): Only pieces with z=2 get red sticker on front face
+        colors.append(FACE_COLORS[0] if z == 2 else COLORS['BLACK'])
+
+        # BACK face (-Z): Only pieces with z=0 get orange sticker on back face
+        colors.append(FACE_COLORS[1] if z == 0 else COLORS['BLACK'])
 
         return colors
 
@@ -263,3 +281,44 @@ class RubiksCubeModel:
             'piece_positions': [(p.grid_position.x, p.grid_position.y, p.grid_position.z)
                                for p in self.pieces]
         }
+
+    def validate_colors(self) -> bool:
+        """
+        Validate that colors are only on outer faces.
+        Returns True if valid, False otherwise.
+        """
+        for piece in self.pieces:
+            x, y, z = piece.grid_position.x, piece.grid_position.y, piece.grid_position.z
+
+            # Check each face
+            # Right face (index 0): should be colored only if x == 2
+            if piece.colors[0] != COLORS['BLACK'] and x != 2:
+                print(f"ERROR: Right face colored but x={x} (should be 2)")
+                return False
+
+            # Left face (index 1): should be colored only if x == 0
+            if piece.colors[1] != COLORS['BLACK'] and x != 0:
+                print(f"ERROR: Left face colored but x={x} (should be 0)")
+                return False
+
+            # Up face (index 2): should be colored only if y == 2
+            if piece.colors[2] != COLORS['BLACK'] and y != 2:
+                print(f"ERROR: Up face colored but y={y} (should be 2)")
+                return False
+
+            # Down face (index 3): should be colored only if y == 0
+            if piece.colors[3] != COLORS['BLACK'] and y != 0:
+                print(f"ERROR: Down face colored but y={y} (should be 0)")
+                return False
+
+            # Front face (index 4): should be colored only if z == 2
+            if piece.colors[4] != COLORS['BLACK'] and z != 2:
+                print(f"ERROR: Front face colored but z={z} (should be 2)")
+                return False
+
+            # Back face (index 5): should be colored only if z == 0
+            if piece.colors[5] != COLORS['BLACK'] and z != 0:
+                print(f"ERROR: Back face colored but z={z} (should be 0)")
+                return False
+
+        return True

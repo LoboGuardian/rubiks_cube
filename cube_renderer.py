@@ -50,9 +50,14 @@ class OpenGLRenderer:
         pygame.init()
         self.screen = pygame.display.set_mode(
             (self.width, self.height),
-            DOUBLEBUF | OPENGL
+            DOUBLEBUF | OPENGL | RESIZABLE
         )
-        pygame.display.set_caption("Rubik's Cube 3D - OpenGL Accelerated")
+        pygame.display.set_caption("🎲 Rubik's Cube 3D - Hardware Accelerated | 60+ FPS")
+
+        # Initialize font for UI text
+        pygame.font.init()
+        self.font = pygame.font.SysFont('Arial', 16, bold=True)
+        self.small_font = pygame.font.SysFont('Arial', 14)
 
     def _initialize_opengl(self):
         """Initialize OpenGL settings"""
@@ -72,8 +77,8 @@ class OpenGLRenderer:
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-        # Set clear color (dark background)
-        glClearColor(0.1, 0.1, 0.1, 1.0)
+        # Set clear color (modern dark gray background)
+        glClearColor(0.18, 0.18, 0.20, 1.0)
 
         # Setup perspective
         self._setup_perspective()
@@ -86,30 +91,37 @@ class OpenGLRenderer:
         glMatrixMode(GL_MODELVIEW)
 
     def _setup_lighting(self):
-        """Setup OpenGL lighting for realistic appearance"""
+        """Setup OpenGL lighting for vibrant color visibility"""
         glEnable(GL_LIGHTING)
         glEnable(GL_LIGHT0)
+        glEnable(GL_LIGHT1)  # Add second light for better illumination
         glEnable(GL_COLOR_MATERIAL)
         glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
 
-        # Light position (above and to the right)
-        light_position = [5.0, 5.0, 5.0, 1.0]
-        glLightfv(GL_LIGHT0, GL_POSITION, light_position)
+        # Main light (above and to the right)
+        light0_position = [5.0, 5.0, 5.0, 1.0]
+        glLightfv(GL_LIGHT0, GL_POSITION, light0_position)
 
-        # Light properties
-        light_ambient = [0.3, 0.3, 0.3, 1.0]
-        light_diffuse = [1.0, 1.0, 1.0, 1.0]
-        light_specular = [1.0, 1.0, 1.0, 1.0]
+        # Main light properties (brighter for better color visibility)
+        light_ambient = [0.5, 0.5, 0.5, 1.0]  # Increased ambient
+        light_diffuse = [1.2, 1.2, 1.2, 1.0]  # Brighter diffuse
+        light_specular = [0.8, 0.8, 0.8, 1.0]
 
         glLightfv(GL_LIGHT0, GL_AMBIENT, light_ambient)
         glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse)
         glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular)
 
-        # Material properties
-        mat_specular = [1.0, 1.0, 1.0, 1.0]
-        mat_shininess = [50.0]
-        glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular)
-        glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess)
+        # Fill light (opposite side for even illumination)
+        light1_position = [-3.0, 2.0, -3.0, 1.0]
+        light1_diffuse = [0.6, 0.6, 0.6, 1.0]
+        glLightfv(GL_LIGHT1, GL_POSITION, light1_position)
+        glLightfv(GL_LIGHT1, GL_DIFFUSE, light1_diffuse)
+
+        # Material properties for glossy stickers
+        mat_specular = [0.9, 0.9, 0.9, 1.0]
+        mat_shininess = [70.0]  # Shinier for plastic look
+        glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_specular)
+        glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mat_shininess)
 
     def _hex_to_rgb(self, hex_color: str) -> Tuple[float, float, float]:
         """Convert hex color to RGB float values (0-1)"""
@@ -132,55 +144,69 @@ class OpenGLRenderer:
         r, g, b = self._hex_to_rgb(color)
 
         if is_sticker:
+            # Calculate face center and outward-pointing normal
+            center = np.mean(vertices, axis=0)
+
+            # Calculate normal from face vertices (counter-clockwise winding)
+            v1 = vertices[1] - vertices[0]
+            v2 = vertices[2] - vertices[0]
+            normal = np.cross(v1, v2)
+
+            # Normalize
+            normal_length = np.linalg.norm(normal)
+            if normal_length > 0:
+                normal = normal / normal_length
+
+            # Ensure normal points away from cube center (outward)
+            # If dot product with center is negative, flip it
+            if np.dot(center, normal) < 0:
+                normal = -normal
+
             # Draw black plastic base
-            glColor3f(0.15, 0.15, 0.15)
+            glColor3f(0.12, 0.12, 0.12)
+            glNormal3fv(normal)  # Set normal for lighting
             glBegin(GL_QUADS)
             for vertex in vertices:
                 glVertex3fv(vertex)
             glEnd()
 
-            # Calculate face center and normal (pointing outward)
-            center = np.mean(vertices, axis=0)
-            v1 = vertices[1] - vertices[0]
-            v2 = vertices[2] - vertices[0]
-            normal = np.cross(v1, v2)
-            normal = normal / np.linalg.norm(normal)
+            # Create inset sticker (92% of face size for visible black border)
+            inset_factor = 0.92
+            inset_vertices = center + (vertices - center) * inset_factor
 
-            # Make sticker smaller (inset from edges) - 88% of face size
-            inset_vertices = center + (vertices - center) * 0.88
+            # Raise sticker above black plastic surface
+            sticker_raise = 0.025
+            sticker_vertices = inset_vertices + normal * sticker_raise
 
-            # Raise sticker slightly above black plastic surface
-            # This creates the 3D sticker effect
-            sticker_vertices = inset_vertices + normal * 0.015
-
-            # Draw colored sticker (slightly raised)
+            # Draw vibrant colored sticker with proper normal
             glColor3f(r, g, b)
+            glNormal3fv(normal)  # Same normal for consistent lighting
             glBegin(GL_QUADS)
             for vertex in sticker_vertices:
                 glVertex3fv(vertex)
             glEnd()
 
-            # Draw thin black border around sticker
+            # Draw thin black outline around sticker
             glDisable(GL_LIGHTING)
             glColor3f(0.0, 0.0, 0.0)
-            glLineWidth(2.5)
+            glLineWidth(2.0)
             glBegin(GL_LINE_LOOP)
             for vertex in sticker_vertices:
                 glVertex3fv(vertex)
             glEnd()
             glEnable(GL_LIGHTING)
         else:
-            # Draw solid black plastic face (internal/hidden face)
+            # Draw solid black plastic face (internal/hidden faces)
             glColor3f(0.15, 0.15, 0.15)
             glBegin(GL_QUADS)
             for vertex in vertices:
                 glVertex3fv(vertex)
             glEnd()
 
-            # Draw darker edges for definition
+            # Subtle edges for black plastic
             glDisable(GL_LIGHTING)
             glColor3f(0.05, 0.05, 0.05)
-            glLineWidth(1.5)
+            glLineWidth(1.0)
             glBegin(GL_LINE_LOOP)
             for vertex in vertices:
                 glVertex3fv(vertex)
@@ -216,9 +242,44 @@ class OpenGLRenderer:
             is_sticker = (color != COLORS['BLACK'])
             self._draw_cube_face(face_vertices, color, is_sticker)
 
+    def _draw_text_2d(self, text: str, x: int, y: int, color=(255, 255, 255), font=None):
+        """Draw 2D text overlay on 3D scene"""
+        if font is None:
+            font = self.small_font
+
+        # Render text to surface
+        text_surface = font.render(text, True, color)
+        text_data = pygame.image.tostring(text_surface, "RGBA", True)
+
+        # Switch to 2D mode
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+        glOrtho(0, self.width, 0, self.height, -1, 1)
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
+
+        # Disable depth test and lighting for 2D
+        glDisable(GL_DEPTH_TEST)
+        glDisable(GL_LIGHTING)
+
+        # Draw text quad
+        glRasterPos2i(x, self.height - y)
+        glDrawPixels(text_surface.get_width(), text_surface.get_height(),
+                     GL_RGBA, GL_UNSIGNED_BYTE, text_data)
+
+        # Restore 3D mode
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_LIGHTING)
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+        glPopMatrix()
+
     def render(self, pieces: List[CubePiece]):
         """
-        Render all cube pieces
+        Render all cube pieces with UI overlay
 
         Args:
             pieces: List of CubePiece objects to render
@@ -244,8 +305,72 @@ class OpenGLRenderer:
         for piece in pieces:
             self._draw_cube_piece(piece)
 
+        # Draw UI overlay
+        self._draw_ui_overlay()
+
         # Swap buffers
         pygame.display.flip()
+
+    def _draw_ui_overlay(self):
+        """Draw helpful UI information"""
+        # Switch to 2D mode for text
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+        glOrtho(0, self.width, self.height, 0, -1, 1)
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
+
+        glDisable(GL_DEPTH_TEST)
+        glDisable(GL_LIGHTING)
+
+        # Title
+        self._render_text("🎲 Rubik's Cube 3D", 10, 10, self.font, (255, 255, 255))
+
+        # Controls
+        y_offset = 35
+        self._render_text("Controls:", 10, y_offset, self.small_font, (200, 200, 200))
+        controls = [
+            "Drag: Rotate View",
+            "Scroll: Zoom",
+            "F/B/R/L/U/D: Rotate Faces",
+            "S: Scramble | Space: Reset",
+            "ESC: Quit"
+        ]
+        for i, control in enumerate(controls):
+            self._render_text(control, 10, y_offset + 20 + i*18, self.small_font, (180, 180, 180))
+
+        # Face color legend
+        y_legend = y_offset + 130
+        self._render_text("Face Colors:", 10, y_legend, self.small_font, (200, 200, 200))
+        legend = [
+            ("Red: Front (F)", (255, 50, 50)),
+            ("Orange: Back (B)", (255, 140, 30)),
+            ("Blue: Right (R)", (50, 100, 255)),
+            ("Green: Left (L)", (50, 255, 100)),
+            ("White: Up (U)", (255, 255, 255)),
+            ("Yellow: Down (D)", (255, 255, 50))
+        ]
+        for i, (text, color) in enumerate(legend):
+            self._render_text(text, 10, y_legend + 20 + i*18, self.small_font, color)
+
+        # Restore 3D mode
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_LIGHTING)
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+        glPopMatrix()
+
+    def _render_text(self, text: str, x: int, y: int, font, color):
+        """Render text using pygame font"""
+        text_surface = font.render(text, True, color)
+        text_data = pygame.image.tostring(text_surface, "RGBA", True)
+        w, h = text_surface.get_size()
+
+        glRasterPos2i(x, y)
+        glDrawPixels(w, h, GL_RGBA, GL_UNSIGNED_BYTE, text_data)
 
     def handle_mouse_press(self, pos: Tuple[int, int]):
         """Handle mouse button press"""
