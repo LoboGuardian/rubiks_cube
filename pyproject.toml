@@ -9,7 +9,9 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "numpy>=2.3.4,<3.0.0",
-    "matplotlib>=3.8.0"
+    "PyOpenGL>=3.1.0",
+    "PyOpenGL-accelerate>=3.1.0",
+    "pygame-ce>=2.5.0"
 ]
 
 
