@@ -106,24 +106,30 @@ class OpenGLRenderer:
         light0_position = [5.0, 5.0, 5.0, 1.0]
         glLightfv(GL_LIGHT0, GL_POSITION, light0_position)
 
-        # Main light properties (brighter for better color visibility)
-        light_ambient = [0.5, 0.5, 0.5, 1.0]  # Increased ambient
-        light_diffuse = [1.2, 1.2, 1.2, 1.0]  # Brighter diffuse
-        light_specular = [0.8, 0.8, 0.8, 1.0]
+        # Keep ambient + diffuse summing close to 1.0 so colors are not
+        # over-amplified. With diffuse > 1.0 the bright red channel of
+        # orange (#FF7F00) clips at 1.0 while green keeps rising, which
+        # shifts the hue toward yellow and makes orange read as a second
+        # yellow face.
+        light_ambient = [0.35, 0.35, 0.35, 1.0]
+        light_diffuse = [0.65, 0.65, 0.65, 1.0]
+        light_specular = [0.15, 0.15, 0.15, 1.0]
 
         glLightfv(GL_LIGHT0, GL_AMBIENT, light_ambient)
         glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse)
         glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular)
 
-        # Fill light (opposite side for even illumination)
+        # Fill light (opposite side for even illumination). Kept dim so the
+        # combined intensity on any face stays near 1.0 and hues are faithful.
         light1_position = [-3.0, 2.0, -3.0, 1.0]
-        light1_diffuse = [0.6, 0.6, 0.6, 1.0]
+        light1_diffuse = [0.2, 0.2, 0.2, 1.0]
         glLightfv(GL_LIGHT1, GL_POSITION, light1_position)
         glLightfv(GL_LIGHT1, GL_DIFFUSE, light1_diffuse)
 
-        # Material properties for glossy stickers
-        mat_specular = [0.9, 0.9, 0.9, 1.0]
-        mat_shininess = [70.0]  # Shinier for plastic look
+        # Material properties: subtle gloss only, so specular highlights do
+        # not wash the sticker colors toward white.
+        mat_specular = [0.2, 0.2, 0.2, 1.0]
+        mat_shininess = [32.0]
         glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_specular)
         glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, mat_shininess)
 
