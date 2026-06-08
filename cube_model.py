@@ -34,6 +34,17 @@ FACE_COLORS = [
 
 FACE_NAMES = ['F', 'B', 'R', 'L', 'U', 'D']
 
+# Outward normal of each local face, in the order used by CubePiece.colors:
+# right(+X), left(-X), up(+Y), down(-Y), front(+Z), back(-Z)
+LOCAL_FACE_NORMALS = [
+    np.array([1.0, 0.0, 0.0]),
+    np.array([-1.0, 0.0, 0.0]),
+    np.array([0.0, 1.0, 0.0]),
+    np.array([0.0, -1.0, 0.0]),
+    np.array([0.0, 0.0, 1.0]),
+    np.array([0.0, 0.0, -1.0]),
+]
+
 
 class Vector3:
     """3D Vector for position calculations"""
@@ -175,7 +186,36 @@ class RubiksCubeModel:
 
     def __init__(self):
         self.pieces: List[CubePiece] = []
+        self.move_history: List[str] = []
         self._initialize_cube()
+
+    @property
+    def move_count(self) -> int:
+        """Number of face turns since the last reset/scramble."""
+        return len(self.move_history)
+
+    @property
+    def last_move(self) -> str:
+        """Most recent face turn, or empty string if none."""
+        return self.move_history[-1] if self.move_history else ""
+
+    def is_solved(self) -> bool:
+        """True when every outer face shows a single color.
+
+        Works in any orientation: each sticker is mapped to a world face via
+        its piece rotation matrix, then every face must be uniform.
+        """
+        faces: Dict[tuple, set] = {}
+        for piece in self.pieces:
+            for index, local_normal in enumerate(LOCAL_FACE_NORMALS):
+                color = piece.colors[index]
+                if color == COLORS['BLACK']:
+                    continue
+                world_normal = piece.rotation_matrix @ local_normal
+                axis = int(np.argmax(np.abs(world_normal)))
+                sign = 1 if world_normal[axis] > 0 else -1
+                faces.setdefault((axis, sign), set()).add(color)
+        return all(len(colors) == 1 for colors in faces.values())
 
     def _initialize_cube(self):
         """Create all 27 cube pieces in solved state"""
@@ -263,8 +303,14 @@ class RubiksCubeModel:
             # Update grid position so future face selection works
             piece.update_position_from_world()
 
+        self.move_history.append(face_name)
+
     def scramble(self, moves: int = 20):
-        """Scramble the cube with random moves"""
+        """Scramble the cube with random moves.
+
+        Clears the history first so move_count reflects the scramble length.
+        """
+        self.move_history = []
         for _ in range(moves):
             face = random.choice(FACE_NAMES)
             self.rotate_face(face)
@@ -272,6 +318,7 @@ class RubiksCubeModel:
     def reset(self):
         """Reset cube to solved state"""
         self._initialize_cube()
+        self.move_history = []
 
     def get_all_pieces(self) -> List[CubePiece]:
         """Get all cube pieces"""

@@ -112,3 +112,38 @@ def test_invalid_face_name_raises():
     model = RubiksCubeModel()
     with pytest.raises(ValueError):
         model.rotate_face("X")
+
+
+def test_is_solved_tracks_state():
+    model = RubiksCubeModel()
+    assert model.is_solved() is True
+    model.rotate_face("R")
+    assert model.is_solved() is False
+    model.reset()
+    assert model.is_solved() is True
+
+
+def test_move_history_counts_and_records_turns():
+    model = RubiksCubeModel()
+    assert model.move_count == 0
+    assert model.last_move == ""
+    model.rotate_face("F")
+    model.rotate_face("U")
+    assert model.move_count == 2
+    assert model.last_move == "U"
+
+
+def test_reset_clears_history():
+    model = RubiksCubeModel()
+    model.scramble(10)
+    assert model.move_count == 10
+    model.reset()
+    assert model.move_count == 0
+    assert model.last_move == ""
+
+
+def test_scramble_resets_move_count_to_scramble_length():
+    model = RubiksCubeModel()
+    model.rotate_face("R")
+    model.scramble(15)
+    assert model.move_count == 15
