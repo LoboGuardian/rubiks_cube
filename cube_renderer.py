@@ -52,7 +52,7 @@ class OpenGLRenderer:
             (self.width, self.height),
             DOUBLEBUF | OPENGL | RESIZABLE
         )
-        pygame.display.set_caption("🎲 Rubik's Cube 3D - Hardware Accelerated | 60+ FPS")
+        pygame.display.set_caption("Rubik's Cube 3D - Hardware Accelerated | 60+ FPS")
 
         # Initialize fonts for UI text
         pygame.font.init()
@@ -299,6 +299,8 @@ class OpenGLRenderer:
     _TITLE_H = 38
     _GAP = 12
     _STATUS_H = 34
+    _NET_CELL = 13
+    _NET_FACE_GAP = 5
 
     _CONTROLS = [
         ("Drag", "Rotate view"),
@@ -343,7 +345,7 @@ class OpenGLRenderer:
         glDisable(GL_DEPTH_TEST)
         glDisable(GL_LIGHTING)
 
-        self._draw_info_panel()
+        self._draw_info_panel(status.get('facelets') or {})
         self._draw_status_bar(status)
 
         glEnable(GL_DEPTH_TEST)
@@ -353,12 +355,15 @@ class OpenGLRenderer:
         glMatrixMode(GL_MODELVIEW)
         glPopMatrix()
 
-    def _draw_info_panel(self):
-        """Translucent panel with grouped controls and a color legend"""
+    def _draw_info_panel(self, facelets: dict = None):
+        """Translucent panel with controls, a color legend and the cube state"""
+        facelets = facelets or {}
         x, y, w, pad, lh = (self._PANEL_X, self._PANEL_Y, self._PANEL_W,
                             self._PAD, self._LINE_H)
+        net_h = 3 * self._NET_CELL * 3 + 2 * self._NET_FACE_GAP
         panel_h = (self._TITLE_H + 10 + self._HEADER_H + len(self._CONTROLS) * lh
-                   + 2 * self._GAP + self._HEADER_H + len(self._LEGEND) * lh + pad)
+                   + 2 * self._GAP + self._HEADER_H + len(self._LEGEND) * lh
+                   + 2 * self._GAP + self._HEADER_H + net_h + pad)
 
         # Panel background and title bar
         self._draw_rect(x, y, w, panel_h, (0.09, 0.09, 0.13, 0.82))
@@ -390,6 +395,35 @@ class OpenGLRenderer:
             self._render_text(name, x + pad + 26, cy, self.small_font, (235, 235, 235))
             self._render_text(face, x + pad + 110, cy, self.small_font, (170, 170, 170))
             cy += lh
+
+        # Cube state section: an unfolded 2D net colored from the live state
+        cy += self._GAP
+        self._draw_rect(x + pad, cy, w - 2 * pad, 1, (1.0, 1.0, 1.0, 0.12))
+        cy += self._GAP
+        self._render_text("CUBE STATE", x + pad, cy, self.small_font, (120, 160, 220))
+        cy += self._HEADER_H
+        net_w = 4 * (3 * self._NET_CELL + self._NET_FACE_GAP) - self._NET_FACE_GAP
+        self._draw_cube_net(facelets, x + (w - net_w) // 2, cy)
+
+    def _draw_cube_net(self, facelets: dict, ox: int, oy: int):
+        """Draw the six faces as an unfolded cross of 3x3 colored cells"""
+        cell, fgap = self._NET_CELL, self._NET_FACE_GAP
+        step = 3 * cell + fgap
+        # (face_column, face_row) of each face in the cross layout
+        layout = {'U': (1, 0), 'L': (0, 1), 'F': (1, 1),
+                  'R': (2, 1), 'B': (3, 1), 'D': (1, 2)}
+        for name, (fc, fr) in layout.items():
+            grid = facelets.get(name)
+            if not grid:
+                continue
+            fx, fy = ox + fc * step, oy + fr * step
+            self._draw_rect(fx - 1, fy - 1, 3 * cell + 2, 3 * cell + 2,
+                            (0.0, 0.0, 0.0, 0.65))
+            for row in range(3):
+                for col in range(3):
+                    r, g, b = self._hex_to_rgb(grid[row][col])
+                    self._draw_rect(fx + col * cell + 1, fy + row * cell + 1,
+                                    cell - 2, cell - 2, (r, g, b, 1.0))
 
     def _draw_status_bar(self, status: dict):
         """Bottom bar with live FPS, move count, last move and solved state"""

@@ -36,9 +36,9 @@ class RubiksCubeApp:
         # Validate color assignment (colors only on outer faces)
         print("Validating color placement...")
         if self.model.validate_colors():
-            print("✓ Colors correctly placed on outer faces only")
+            print("Colors correctly placed on outer faces only")
         else:
-            print("⚠ WARNING: Color placement validation failed!")
+            print("WARNING: Color placement validation failed!")
 
         # Initialize Renderer
         print("Creating renderer (hardware accelerated)...")
@@ -48,7 +48,7 @@ class RubiksCubeApp:
         self.running = True
         self.clock = pygame.time.Clock()
 
-        print("✓ Initialization complete!")
+        print("Initialization complete!")
         self._print_instructions()
 
     def _print_instructions(self):
@@ -144,6 +144,7 @@ class RubiksCubeApp:
                 'moves': self.model.move_count,
                 'last_move': self.model.last_move,
                 'solved': self.model.is_solved(),
+                'facelets': self.model.get_facelets(),
             }
             self.renderer.render(pieces, status)
 
@@ -152,7 +153,7 @@ class RubiksCubeApp:
 
         # Cleanup
         self.renderer.cleanup()
-        print("\nThanks for playing! 🎲")
+        print("\nThanks for playing!")
 
     def print_performance_info(self):
         """Print performance information"""
