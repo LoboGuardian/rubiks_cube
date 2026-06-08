@@ -395,3 +395,37 @@ class RubiksCubeModel:
                 return False
 
         return True
+
+
+class FaceletState:
+    """An editable six-face sticker grid for inputting an arbitrary state.
+
+    This is the buffer behind the color picker. It is a plain copy of the
+    facelet colors and is independent of the 3D piece model: painting a cell
+    does not move any piece. It is intended as input for a future solver, so
+    its only invariant is the count of each color.
+    """
+
+    def __init__(self, facelets: Dict[str, List[List[str]]]):
+        self.faces: Dict[str, List[List[str]]] = {
+            face: [list(row) for row in grid]
+            for face, grid in facelets.items()
+        }
+
+    def paint(self, face: str, row: int, col: int, color: str):
+        """Set a single facelet to a color."""
+        self.faces[face][row][col] = color
+
+    def color_counts(self) -> Dict[str, int]:
+        """Count occurrences of each color across all facelets."""
+        counts: Dict[str, int] = {}
+        for grid in self.faces.values():
+            for row in grid:
+                for color in row:
+                    counts[color] = counts.get(color, 0) + 1
+        return counts
+
+    def is_valid(self) -> bool:
+        """True when each of the six face colors appears exactly 9 times."""
+        counts = self.color_counts()
+        return all(counts.get(color, 0) == 9 for color in FACE_COLORS)

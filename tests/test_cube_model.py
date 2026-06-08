@@ -9,7 +9,13 @@ appear solved after every turn; these tests fail loudly if that returns.
 import numpy as np
 import pytest
 
-from cube_model import COLORS, FACE_COLORS, FACE_NAMES, RubiksCubeModel
+from cube_model import (
+    COLORS,
+    FACE_COLORS,
+    FACE_NAMES,
+    FaceletState,
+    RubiksCubeModel,
+)
 
 # Local outward normals for each face index in CubePiece.colors:
 # right(+X), left(-X), up(+Y), down(-Y), front(+Z), back(-Z)
@@ -180,3 +186,22 @@ def test_facelets_turn_breaks_front_uniformity():
     front = model.get_facelets()["F"]
     colors = {cell for row in front for cell in row}
     assert len(colors) > 1
+
+
+def test_facelet_editor_paint_and_validity():
+    model = RubiksCubeModel()
+    editor = FaceletState(model.get_facelets())
+    assert editor.is_valid() is True
+    editor.paint("F", 0, 0, COLORS["BLUE"])
+    assert editor.faces["F"][0][0] == COLORS["BLUE"]
+    assert editor.is_valid() is False  # 10 blue, 8 red
+
+
+def test_facelet_editor_is_independent_of_model():
+    model = RubiksCubeModel()
+    facelets = model.get_facelets()
+    editor = FaceletState(facelets)
+    editor.paint("U", 1, 1, COLORS["RED"])
+    # Neither the source dict nor the model are mutated by painting.
+    assert facelets["U"][1][1] == COLORS["WHITE"]
+    assert model.get_facelets()["U"][1][1] == COLORS["WHITE"]
