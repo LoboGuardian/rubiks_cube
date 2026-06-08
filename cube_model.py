@@ -45,6 +45,17 @@ LOCAL_FACE_NORMALS = [
     np.array([0.0, 0.0, -1.0]),
 ]
 
+# Basis for projecting the 3D state onto each face of the unfolded 2D net:
+# (outward normal, screen-right vector, screen-up vector) in world space.
+NET_FACE_BASIS = {
+    'U': (np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, -1.0])),
+    'D': (np.array([0.0, -1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0])),
+    'F': (np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])),
+    'B': (np.array([0.0, 0.0, -1.0]), np.array([-1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])),
+    'R': (np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, -1.0]), np.array([0.0, 1.0, 0.0])),
+    'L': (np.array([-1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 1.0, 0.0])),
+}
+
 
 class Vector3:
     """3D Vector for position calculations"""
@@ -323,6 +334,32 @@ class RubiksCubeModel:
     def get_all_pieces(self) -> List[CubePiece]:
         """Get all cube pieces"""
         return self.pieces
+
+    def get_facelets(self) -> Dict[str, List[List[str]]]:
+        """Return the live sticker color of every facelet, per face.
+
+        Maps each face name to a 3x3 grid (row-major, top-left first) of hex
+        color strings, derived from the current 3D state so it reflects
+        scrambles and turns. A solved cube yields six uniform grids.
+        """
+        result: Dict[str, List[List[str]]] = {}
+        for face, (normal, right, up) in NET_FACE_BASIS.items():
+            grid = [[COLORS['BLACK']] * GRID_SIZE for _ in range(GRID_SIZE)]
+            for piece in self.pieces:
+                pos = piece.position.to_array()
+                if np.dot(pos, normal) < 0.5:
+                    continue  # not on this outer layer
+                col = int(round(np.dot(pos, right))) + 1
+                row = 1 - int(round(np.dot(pos, up)))
+                for index, local_normal in enumerate(LOCAL_FACE_NORMALS):
+                    color = piece.colors[index]
+                    if color == COLORS['BLACK']:
+                        continue
+                    if np.dot(piece.rotation_matrix @ local_normal, normal) > 0.9:
+                        grid[row][col] = color
+                        break
+            result[face] = grid
+        return result
 
     def get_state_summary(self) -> Dict:
         """Get summary of cube state for debugging"""

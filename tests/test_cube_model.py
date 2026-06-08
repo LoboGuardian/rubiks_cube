@@ -9,7 +9,7 @@ appear solved after every turn; these tests fail loudly if that returns.
 import numpy as np
 import pytest
 
-from cube_model import COLORS, FACE_NAMES, RubiksCubeModel
+from cube_model import COLORS, FACE_COLORS, FACE_NAMES, RubiksCubeModel
 
 # Local outward normals for each face index in CubePiece.colors:
 # right(+X), left(-X), up(+Y), down(-Y), front(+Z), back(-Z)
@@ -147,3 +147,36 @@ def test_scramble_resets_move_count_to_scramble_length():
     model.rotate_face("R")
     model.scramble(15)
     assert model.move_count == 15
+
+
+def test_facelets_solved_faces_are_uniform():
+    model = RubiksCubeModel()
+    facelets = model.get_facelets()
+    expected = {
+        "F": COLORS["RED"], "B": COLORS["ORANGE"], "R": COLORS["BLUE"],
+        "L": COLORS["GREEN"], "U": COLORS["WHITE"], "D": COLORS["YELLOW"],
+    }
+    for face, color in expected.items():
+        grid = facelets[face]
+        assert all(cell == color for row in grid for cell in row), face
+        assert grid[1][1] == color  # center identifies the face
+
+
+def test_facelets_conserve_nine_of_each_color():
+    model = RubiksCubeModel()
+    model.scramble(40)
+    counts = {}
+    for grid in model.get_facelets().values():
+        for row in grid:
+            for cell in row:
+                counts[cell] = counts.get(cell, 0) + 1
+    for face_color in FACE_COLORS:
+        assert counts.get(face_color, 0) == 9, face_color
+
+
+def test_facelets_turn_breaks_front_uniformity():
+    model = RubiksCubeModel()
+    model.rotate_face("R")
+    front = model.get_facelets()["F"]
+    colors = {cell for row in front for cell in row}
+    assert len(colors) > 1
