@@ -137,9 +137,15 @@ class RubiksCubeApp:
             # Handle events
             self.handle_events()
 
-            # Render cube
+            # Render cube with live status for the HUD
             pieces = self.model.get_all_pieces()
-            self.renderer.render(pieces)
+            status = {
+                'fps': self.clock.get_fps(),
+                'moves': self.model.move_count,
+                'last_move': self.model.last_move,
+                'solved': self.model.is_solved(),
+            }
+            self.renderer.render(pieces, status)
 
             # Maintain 60 FPS
             self.clock.tick(60)
