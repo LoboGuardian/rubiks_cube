@@ -267,8 +267,20 @@ class OpenGLRenderer:
             status: Optional dict with live cube state for the status bar
                 ('fps', 'moves', 'last_move', 'solved')
         """
+        status = status or {}
+
         # Clear buffers
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        # In edit mode the cube shrinks to a corner so the picker takes focus
+        edit_mode = status.get('edit_mode', False)
+        if edit_mode:
+            vx, vy, vw, vh = self._pip_rect()
+            glViewport(vx, vy, vw, vh)
+            glMatrixMode(GL_PROJECTION)
+            glLoadIdentity()
+            gluPerspective(45, vw / vh, 0.1, 50.0)
+            glMatrixMode(GL_MODELVIEW)
 
         # Reset modelview matrix
         glLoadIdentity()
@@ -288,11 +300,22 @@ class OpenGLRenderer:
         for piece in pieces:
             self._draw_cube_piece(piece)
 
+        # Restore the full-window viewport for the 2D overlay
+        if edit_mode:
+            glViewport(0, 0, self.width, self.height)
+            self._setup_perspective()
+
         # Draw UI overlay
         self._draw_ui_overlay(status)
 
         # Swap buffers
         pygame.display.flip()
+
+    def _pip_rect(self):
+        """Bottom-right viewport (GL origin) for the minimized cube"""
+        size = min(320, self.width // 3, self.height - self._STATUS_H - 60)
+        margin = 18
+        return self.width - size - margin, self._STATUS_H + margin, size, size
 
     # UI layout constants (pixels)
     _PANEL_X = 14
@@ -357,6 +380,8 @@ class OpenGLRenderer:
         self._net_cell_rects = {}
         self._palette_rects = {}
 
+        if status.get('edit_mode'):
+            self._draw_pip_frame()
         self._draw_info_panel(status)
         self._draw_status_bar(status)
 
@@ -378,7 +403,7 @@ class OpenGLRenderer:
         x, y, w, pad, lh = (self._PANEL_X, self._PANEL_Y, self._PANEL_W,
                             self._PAD, self._LINE_H)
         net_h = 3 * self._NET_CELL * 3 + 2 * self._NET_FACE_GAP
-        edit_h = (self._GAP + self._SWATCH + lh) if edit_mode else 0
+        edit_h = (self._GAP + self._SWATCH + 2 * lh) if edit_mode else 0
         panel_h = (self._TITLE_H + 10 + self._HEADER_H + len(self._CONTROLS) * lh
                    + 2 * self._GAP + self._HEADER_H + len(self._LEGEND) * lh
                    + 2 * self._GAP + self._HEADER_H + net_h + edit_h + pad)
@@ -428,6 +453,21 @@ class OpenGLRenderer:
         if edit_mode:
             cy += net_h + self._GAP
             self._draw_palette(palette, selected, x + pad, cy)
+            cy += self._SWATCH + lh - 6
+            self._render_text("C = clear net", x + pad, cy,
+                              self.small_font, (160, 160, 160))
+
+    def _draw_pip_frame(self):
+        """Outline + label around the minimized cube (overlay coordinates)"""
+        vx, vy, vw, vh = self._pip_rect()
+        top = self.height - (vy + vh)  # convert GL bottom-left to top-left
+        border = (0.30, 0.45, 0.70, 0.9)
+        self._draw_rect(vx - 2, top - 2, vw + 4, 2, border)
+        self._draw_rect(vx - 2, top + vh, vw + 4, 2, border)
+        self._draw_rect(vx - 2, top - 2, 2, vh + 4, border)
+        self._draw_rect(vx + vw, top - 2, 2, vh + 4, border)
+        self._render_text("CUBE (view only)", vx, top - 8,
+                          self.small_font, (150, 170, 200))
 
     def _draw_palette(self, palette, selected, ox: int, oy: int):
         """Row of clickable color swatches; the selected one is outlined"""
