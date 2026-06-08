@@ -412,9 +412,27 @@ class FaceletState:
             for face, grid in facelets.items()
         }
 
-    def paint(self, face: str, row: int, col: int, color: str):
-        """Set a single facelet to a color."""
+    def paint(self, face: str, row: int, col: int, color: str) -> bool:
+        """Set a single facelet, refusing to exceed nine of any color.
+
+        Returns True if the cell now holds the color (including the no-op
+        case where it already did), False if the paint was rejected because
+        the color is already used nine times elsewhere.
+        """
+        current = self.faces[face][row][col]
+        if color == current:
+            return True
+        if self.color_counts().get(color, 0) >= 9:
+            return False
         self.faces[face][row][col] = color
+        return True
+
+    def clear(self):
+        """Blank every facelet so the state can be painted from scratch."""
+        for grid in self.faces.values():
+            for row in grid:
+                for index in range(len(row)):
+                    row[index] = COLORS['BLACK']
 
     def color_counts(self) -> Dict[str, int]:
         """Count occurrences of each color across all facelets."""

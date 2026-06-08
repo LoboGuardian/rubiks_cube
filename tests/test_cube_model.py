@@ -188,20 +188,40 @@ def test_facelets_turn_breaks_front_uniformity():
     assert len(colors) > 1
 
 
-def test_facelet_editor_paint_and_validity():
+def test_facelet_editor_paint_caps_color_at_nine():
+    model = RubiksCubeModel()
+    editor = FaceletState(model.get_facelets())  # solved: nine of each
+    # Blue is already used nine times, so painting another cell blue fails.
+    assert editor.paint("F", 0, 0, COLORS["BLUE"]) is False
+    assert editor.faces["F"][0][0] == COLORS["RED"]
+    assert editor.is_valid() is True
+    # Repainting a cell its own color is an allowed no-op.
+    assert editor.paint("F", 0, 0, COLORS["RED"]) is True
+
+
+def test_facelet_editor_clear_blanks_all_cells():
     model = RubiksCubeModel()
     editor = FaceletState(model.get_facelets())
-    assert editor.is_valid() is True
-    editor.paint("F", 0, 0, COLORS["BLUE"])
-    assert editor.faces["F"][0][0] == COLORS["BLUE"]
-    assert editor.is_valid() is False  # 10 blue, 8 red
+    editor.clear()
+    cells = [c for grid in editor.faces.values() for row in grid for c in row]
+    assert all(c == COLORS["BLACK"] for c in cells)
+    assert editor.is_valid() is False
+
+
+def test_facelet_editor_paint_after_clear():
+    model = RubiksCubeModel()
+    editor = FaceletState(model.get_facelets())
+    editor.clear()
+    assert editor.paint("U", 1, 1, COLORS["RED"]) is True
+    assert editor.faces["U"][1][1] == COLORS["RED"]
 
 
 def test_facelet_editor_is_independent_of_model():
     model = RubiksCubeModel()
     facelets = model.get_facelets()
     editor = FaceletState(facelets)
+    editor.clear()
     editor.paint("U", 1, 1, COLORS["RED"])
-    # Neither the source dict nor the model are mutated by painting.
+    # Neither the source dict nor the model are mutated by editing.
     assert facelets["U"][1][1] == COLORS["WHITE"]
     assert model.get_facelets()["U"][1][1] == COLORS["WHITE"]
