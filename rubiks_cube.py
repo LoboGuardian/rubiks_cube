@@ -122,11 +122,12 @@ class RubiksCubeApp:
             self.editor.paint(face, row, col, self.selected_color)
 
     def _toggle_edit_mode(self):
-        """Enter/leave the color picker; entering snapshots the live state"""
+        """Enter/leave the color picker; entering opens a clean net to paint"""
         self.edit_mode = not self.edit_mode
         if self.edit_mode:
             self.editor = FaceletState(self.model.get_facelets())
-            print("Edit mode ON - click a color then paint cells")
+            self.editor.clear()
+            print("Edit mode ON - click a color then paint cells (C clears)")
         else:
             print("Edit mode OFF")
 
@@ -142,9 +143,11 @@ class RubiksCubeApp:
             self.running = False
             return
 
-        # While painting, ignore cube-mutating keys to avoid desyncing the
-        # editable net from the 3D cube.
+        # While painting, the only extra key is clearing the net; ignore
+        # cube-mutating keys so the editable net cannot desync from the cube.
         if self.edit_mode:
+            if key == K_c:
+                self.editor.clear()
             return
 
         # Face rotations
