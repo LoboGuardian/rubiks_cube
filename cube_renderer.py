@@ -54,8 +54,9 @@ class OpenGLRenderer:
         )
         pygame.display.set_caption("🎲 Rubik's Cube 3D - Hardware Accelerated | 60+ FPS")
 
-        # Initialize font for UI text
+        # Initialize fonts for UI text
         pygame.font.init()
+        self.title_font = pygame.font.SysFont('Arial', 20, bold=True)
         self.font = pygame.font.SysFont('Arial', 16, bold=True)
         self.small_font = pygame.font.SysFont('Arial', 14)
 
@@ -252,47 +253,14 @@ class OpenGLRenderer:
             is_sticker = (color != COLORS['BLACK'])
             self._draw_cube_face(face_vertices, color, is_sticker)
 
-    def _draw_text_2d(self, text: str, x: int, y: int, color=(255, 255, 255), font=None):
-        """Draw 2D text overlay on 3D scene"""
-        if font is None:
-            font = self.small_font
-
-        # Render text to surface
-        text_surface = font.render(text, True, color)
-        text_data = pygame.image.tostring(text_surface, "RGBA", True)
-
-        # Switch to 2D mode
-        glMatrixMode(GL_PROJECTION)
-        glPushMatrix()
-        glLoadIdentity()
-        glOrtho(0, self.width, 0, self.height, -1, 1)
-        glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
-        glLoadIdentity()
-
-        # Disable depth test and lighting for 2D
-        glDisable(GL_DEPTH_TEST)
-        glDisable(GL_LIGHTING)
-
-        # Draw text quad
-        glRasterPos2i(x, self.height - y)
-        glDrawPixels(text_surface.get_width(), text_surface.get_height(),
-                     GL_RGBA, GL_UNSIGNED_BYTE, text_data)
-
-        # Restore 3D mode
-        glEnable(GL_DEPTH_TEST)
-        glEnable(GL_LIGHTING)
-        glMatrixMode(GL_PROJECTION)
-        glPopMatrix()
-        glMatrixMode(GL_MODELVIEW)
-        glPopMatrix()
-
-    def render(self, pieces: List[CubePiece]):
+    def render(self, pieces: List[CubePiece], status: dict = None):
         """
-        Render all cube pieces with UI overlay
+        Render all cube pieces with the UI overlay
 
         Args:
             pieces: List of CubePiece objects to render
+            status: Optional dict with live cube state for the status bar
+                ('fps', 'moves', 'last_move', 'solved')
         """
         # Clear buffers
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -316,14 +284,54 @@ class OpenGLRenderer:
             self._draw_cube_piece(piece)
 
         # Draw UI overlay
-        self._draw_ui_overlay()
+        self._draw_ui_overlay(status)
 
         # Swap buffers
         pygame.display.flip()
 
-    def _draw_ui_overlay(self):
-        """Draw helpful UI information"""
-        # Switch to 2D mode for text
+    # UI layout constants (pixels)
+    _PANEL_X = 14
+    _PANEL_Y = 14
+    _PANEL_W = 258
+    _PAD = 16
+    _LINE_H = 21
+    _HEADER_H = 26
+    _TITLE_H = 38
+    _GAP = 12
+    _STATUS_H = 34
+
+    _CONTROLS = [
+        ("Drag", "Rotate view"),
+        ("Scroll", "Zoom"),
+        ("F B R L U D", "Turn a face"),
+        ("S", "Scramble"),
+        ("Space", "Reset"),
+        ("Esc / Q", "Quit"),
+    ]
+    _LEGEND = [
+        ("Red", "Front", 'RED'),
+        ("Orange", "Back", 'ORANGE'),
+        ("Blue", "Right", 'BLUE'),
+        ("Green", "Left", 'GREEN'),
+        ("White", "Up", 'WHITE'),
+        ("Yellow", "Down", 'YELLOW'),
+    ]
+
+    def _draw_rect(self, x: float, y: float, w: float, h: float, rgba):
+        """Draw a filled 2D rectangle (overlay space, blending enabled)"""
+        glColor4f(*rgba)
+        glBegin(GL_QUADS)
+        glVertex2f(x, y)
+        glVertex2f(x + w, y)
+        glVertex2f(x + w, y + h)
+        glVertex2f(x, y + h)
+        glEnd()
+
+    def _draw_ui_overlay(self, status: dict = None):
+        """Draw the HUD: info panel (controls + legend) and a status bar"""
+        status = status or {}
+
+        # Switch to 2D overlay mode (top-left origin, y grows downward)
         glMatrixMode(GL_PROJECTION)
         glPushMatrix()
         glLoadIdentity()
@@ -335,43 +343,73 @@ class OpenGLRenderer:
         glDisable(GL_DEPTH_TEST)
         glDisable(GL_LIGHTING)
 
-        # Title
-        self._render_text("🎲 Rubik's Cube 3D", 10, 10, self.font, (255, 255, 255))
+        self._draw_info_panel()
+        self._draw_status_bar(status)
 
-        # Controls
-        y_offset = 35
-        self._render_text("Controls:", 10, y_offset, self.small_font, (200, 200, 200))
-        controls = [
-            "Drag: Rotate View",
-            "Scroll: Zoom",
-            "F/B/R/L/U/D: Rotate Faces",
-            "S: Scramble | Space: Reset",
-            "ESC: Quit"
-        ]
-        for i, control in enumerate(controls):
-            self._render_text(control, 10, y_offset + 20 + i*18, self.small_font, (180, 180, 180))
-
-        # Face color legend
-        y_legend = y_offset + 130
-        self._render_text("Face Colors:", 10, y_legend, self.small_font, (200, 200, 200))
-        legend = [
-            ("Red: Front (F)", (255, 50, 50)),
-            ("Orange: Back (B)", (255, 140, 30)),
-            ("Blue: Right (R)", (50, 100, 255)),
-            ("Green: Left (L)", (50, 255, 100)),
-            ("White: Up (U)", (255, 255, 255)),
-            ("Yellow: Down (D)", (255, 255, 50))
-        ]
-        for i, (text, color) in enumerate(legend):
-            self._render_text(text, 10, y_legend + 20 + i*18, self.small_font, color)
-
-        # Restore 3D mode
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
         glMatrixMode(GL_PROJECTION)
         glPopMatrix()
         glMatrixMode(GL_MODELVIEW)
         glPopMatrix()
+
+    def _draw_info_panel(self):
+        """Translucent panel with grouped controls and a color legend"""
+        x, y, w, pad, lh = (self._PANEL_X, self._PANEL_Y, self._PANEL_W,
+                            self._PAD, self._LINE_H)
+        panel_h = (self._TITLE_H + 10 + self._HEADER_H + len(self._CONTROLS) * lh
+                   + 2 * self._GAP + self._HEADER_H + len(self._LEGEND) * lh + pad)
+
+        # Panel background and title bar
+        self._draw_rect(x, y, w, panel_h, (0.09, 0.09, 0.13, 0.82))
+        self._draw_rect(x, y, w, self._TITLE_H, (0.17, 0.17, 0.26, 0.95))
+        self._draw_rect(x, y + self._TITLE_H - 2, w, 2, (0.30, 0.45, 0.70, 0.9))
+        self._render_text("Rubik's Cube 3D", x + pad, y + 9,
+                          self.title_font, (255, 255, 255))
+
+        cy = y + self._TITLE_H + 10
+        # Controls section
+        self._render_text("CONTROLS", x + pad, cy, self.small_font, (120, 160, 220))
+        cy += self._HEADER_H
+        for key, desc in self._CONTROLS:
+            self._render_text(key, x + pad, cy, self.small_font, (255, 210, 110))
+            self._render_text(desc, x + pad + 104, cy, self.small_font, (205, 205, 205))
+            cy += lh
+
+        # Divider
+        cy += self._GAP
+        self._draw_rect(x + pad, cy, w - 2 * pad, 1, (1.0, 1.0, 1.0, 0.12))
+        cy += self._GAP
+
+        # Legend section with color swatches
+        self._render_text("FACE COLORS", x + pad, cy, self.small_font, (120, 160, 220))
+        cy += self._HEADER_H
+        for name, face, color_key in self._LEGEND:
+            r, g, b = self._hex_to_rgb(COLORS[color_key])
+            self._draw_rect(x + pad, cy - 13, 14, 14, (r, g, b, 1.0))
+            self._render_text(name, x + pad + 26, cy, self.small_font, (235, 235, 235))
+            self._render_text(face, x + pad + 110, cy, self.small_font, (170, 170, 170))
+            cy += lh
+
+    def _draw_status_bar(self, status: dict):
+        """Bottom bar with live FPS, move count, last move and solved state"""
+        fps = status.get('fps', 0.0)
+        moves = status.get('moves', 0)
+        last_move = status.get('last_move') or '-'
+        solved = status.get('solved', True)
+
+        bar_h = self._STATUS_H
+        by = self.height - bar_h
+        self._draw_rect(0, by, self.width, bar_h, (0.08, 0.08, 0.11, 0.90))
+        self._draw_rect(0, by, self.width, 2, (0.30, 0.45, 0.70, 0.9))
+
+        ty = by + 23
+        info = f"FPS {fps:3.0f}     Moves {moves}     Last: {last_move}"
+        self._render_text(info, 16, ty, self.font, (210, 210, 210))
+
+        state = "SOLVED" if solved else "SCRAMBLED"
+        color = (90, 220, 120) if solved else (255, 170, 70)
+        self._render_text(state, self.width - 130, ty, self.font, color)
 
     def _render_text(self, text: str, x: int, y: int, font, color):
         """Render text using pygame font"""
