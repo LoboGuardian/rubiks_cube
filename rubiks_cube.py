@@ -16,7 +16,7 @@ Usage:
 
 import pygame
 from pygame.locals import *
-from cube_model import RubiksCubeModel
+from cube_model import COLORS, FaceletState, RubiksCubeModel
 from cube_renderer import OpenGLRenderer
 import sys
 
@@ -48,6 +48,13 @@ class RubiksCubeApp:
         self.running = True
         self.clock = pygame.time.Clock()
 
+        # Color-picker (edit) state
+        self.edit_mode = False
+        self.editor = None
+        self.palette = [COLORS[k] for k in
+                        ('RED', 'ORANGE', 'BLUE', 'GREEN', 'WHITE', 'YELLOW')]
+        self.selected_color = self.palette[0]
+
         print("Initialization complete!")
         self._print_instructions()
 
@@ -69,6 +76,7 @@ class RubiksCubeApp:
         print("  • U/D: Rotate Up/Down face")
         print("  • S: Scramble cube")
         print("  • Space: Solve (reset)")
+        print("  • E: Edit mode (click a palette color, then paint cells)")
         print("  • ESC/Q: Quit")
         print("="*60 + "\n")
 
@@ -83,7 +91,10 @@ class RubiksCubeApp:
 
             elif event.type == MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left click
-                    self.renderer.handle_mouse_press(event.pos)
+                    if self.edit_mode:
+                        self._handle_paint_click(event.pos)
+                    else:
+                        self.renderer.handle_mouse_press(event.pos)
                 elif event.button == 4:  # Scroll up
                     self.renderer.handle_mouse_wheel(1)
                 elif event.button == 5:  # Scroll down
@@ -99,8 +110,43 @@ class RubiksCubeApp:
             elif event.type == VIDEORESIZE:
                 self.renderer.resize(event.w, event.h)
 
+    def _handle_paint_click(self, pos):
+        """In edit mode, a click selects a palette color or paints a cell"""
+        color = self.renderer.palette_color_at(pos)
+        if color is not None:
+            self.selected_color = color
+            return
+        cell = self.renderer.cell_at(pos)
+        if cell is not None:
+            face, row, col = cell
+            self.editor.paint(face, row, col, self.selected_color)
+
+    def _toggle_edit_mode(self):
+        """Enter/leave the color picker; entering snapshots the live state"""
+        self.edit_mode = not self.edit_mode
+        if self.edit_mode:
+            self.editor = FaceletState(self.model.get_facelets())
+            print("Edit mode ON - click a color then paint cells")
+        else:
+            print("Edit mode OFF")
+
     def _handle_keypress(self, key: int):
         """Handle keyboard input"""
+        # Edit mode toggle is always available
+        if key == K_e:
+            self._toggle_edit_mode()
+            return
+
+        # Quit is always available
+        if key == K_ESCAPE or key == K_q:
+            self.running = False
+            return
+
+        # While painting, ignore cube-mutating keys to avoid desyncing the
+        # editable net from the 3D cube.
+        if self.edit_mode:
+            return
+
         # Face rotations
         if key == K_f:
             self.model.rotate_face('F')
@@ -125,10 +171,6 @@ class RubiksCubeApp:
             self.model.reset()
             print("Cube solved!")
 
-        # Quit
-        elif key == K_ESCAPE or key == K_q:
-            self.running = False
-
     def run(self):
         """Main application loop"""
         print("Starting main loop...")
@@ -137,14 +179,25 @@ class RubiksCubeApp:
             # Handle events
             self.handle_events()
 
-            # Render cube with live status for the HUD
+            # Render cube with live status for the HUD. In edit mode the net
+            # shows the editable buffer; otherwise it mirrors the 3D cube.
             pieces = self.model.get_all_pieces()
+            if self.edit_mode:
+                facelets = self.editor.faces
+                valid = self.editor.is_valid()
+            else:
+                facelets = self.model.get_facelets()
+                valid = True
             status = {
                 'fps': self.clock.get_fps(),
                 'moves': self.model.move_count,
                 'last_move': self.model.last_move,
                 'solved': self.model.is_solved(),
-                'facelets': self.model.get_facelets(),
+                'facelets': facelets,
+                'edit_mode': self.edit_mode,
+                'palette': self.palette,
+                'selected_color': self.selected_color,
+                'valid': valid,
             }
             self.renderer.render(pieces, status)
 
