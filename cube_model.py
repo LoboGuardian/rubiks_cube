@@ -248,7 +248,11 @@ class RubiksCubeModel:
         rotation_matrix = self._rotation_matrix_from_axis_angle(axis, angle)
 
         for piece in face_pieces:
-            # Update rotation matrix
+            # Update rotation matrix. Stickers are indexed by the piece's
+            # local face, so rotating the geometry carries the colors with
+            # the piece automatically. Re-deriving colors from position here
+            # would be wrong: it would "re-solve" the cube on every turn and
+            # paint stickers onto faces that now point inward.
             piece.rotation_matrix = rotation_matrix @ piece.rotation_matrix
 
             # Update position
@@ -256,9 +260,8 @@ class RubiksCubeModel:
             new_pos = rotation_matrix @ old_pos
             piece.position = Vector3(new_pos[0], new_pos[1], new_pos[2])
 
-            # Update grid position
+            # Update grid position so future face selection works
             piece.update_position_from_world()
-            piece.colors = piece._initialize_colors()
 
     def scramble(self, moves: int = 20):
         """Scramble the cube with random moves"""
@@ -284,41 +287,27 @@ class RubiksCubeModel:
 
     def validate_colors(self) -> bool:
         """
-        Validate that colors are only on outer faces.
+        Validate sticker conservation: each of the six face colors must
+        appear exactly 9 times across all pieces.
+
+        This invariant holds in any state, solved or scrambled, because
+        stickers travel with their piece. A position-based check (color X
+        only on the X-face) is only valid in the solved state, so it cannot
+        be used once the cube has been turned.
+
         Returns True if valid, False otherwise.
         """
+        counts: Dict[str, int] = {}
         for piece in self.pieces:
-            x, y, z = piece.grid_position.x, piece.grid_position.y, piece.grid_position.z
+            for color in piece.colors:
+                if color != COLORS['BLACK']:
+                    counts[color] = counts.get(color, 0) + 1
 
-            # Check each face
-            # Right face (index 0): should be colored only if x == 2
-            if piece.colors[0] != COLORS['BLACK'] and x != 2:
-                print(f"ERROR: Right face colored but x={x} (should be 2)")
-                return False
-
-            # Left face (index 1): should be colored only if x == 0
-            if piece.colors[1] != COLORS['BLACK'] and x != 0:
-                print(f"ERROR: Left face colored but x={x} (should be 0)")
-                return False
-
-            # Up face (index 2): should be colored only if y == 2
-            if piece.colors[2] != COLORS['BLACK'] and y != 2:
-                print(f"ERROR: Up face colored but y={y} (should be 2)")
-                return False
-
-            # Down face (index 3): should be colored only if y == 0
-            if piece.colors[3] != COLORS['BLACK'] and y != 0:
-                print(f"ERROR: Down face colored but y={y} (should be 0)")
-                return False
-
-            # Front face (index 4): should be colored only if z == 2
-            if piece.colors[4] != COLORS['BLACK'] and z != 2:
-                print(f"ERROR: Front face colored but z={z} (should be 2)")
-                return False
-
-            # Back face (index 5): should be colored only if z == 0
-            if piece.colors[5] != COLORS['BLACK'] and z != 0:
-                print(f"ERROR: Back face colored but z={z} (should be 0)")
+        for face_color in FACE_COLORS:
+            found = counts.get(face_color, 0)
+            if found != 9:
+                print(f"ERROR: color {face_color} appears {found} times "
+                      f"(expected 9)")
                 return False
 
         return True
