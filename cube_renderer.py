@@ -62,6 +62,11 @@ class OpenGLRenderer:
 
     def _initialize_opengl(self):
         """Initialize OpenGL settings"""
+        # Hit-test rectangles for the editable net and palette, refreshed
+        # every frame by the overlay draw and read by the controller.
+        self._net_cell_rects = {}
+        self._palette_rects = {}
+
         # Enable depth testing
         glEnable(GL_DEPTH_TEST)
         glDepthFunc(GL_LESS)
@@ -301,6 +306,8 @@ class OpenGLRenderer:
     _STATUS_H = 34
     _NET_CELL = 13
     _NET_FACE_GAP = 5
+    _SWATCH = 24
+    _SWATCH_GAP = 7
 
     _CONTROLS = [
         ("Drag", "Rotate view"),
@@ -308,6 +315,7 @@ class OpenGLRenderer:
         ("F B R L U D", "Turn a face"),
         ("S", "Scramble"),
         ("Space", "Reset"),
+        ("E", "Edit / paint"),
         ("Esc / Q", "Quit"),
     ]
     _LEGEND = [
@@ -345,7 +353,11 @@ class OpenGLRenderer:
         glDisable(GL_DEPTH_TEST)
         glDisable(GL_LIGHTING)
 
-        self._draw_info_panel(status.get('facelets') or {})
+        # Refresh hit-test rectangles for this frame
+        self._net_cell_rects = {}
+        self._palette_rects = {}
+
+        self._draw_info_panel(status)
         self._draw_status_bar(status)
 
         glEnable(GL_DEPTH_TEST)
@@ -355,15 +367,21 @@ class OpenGLRenderer:
         glMatrixMode(GL_MODELVIEW)
         glPopMatrix()
 
-    def _draw_info_panel(self, facelets: dict = None):
+    def _draw_info_panel(self, status: dict = None):
         """Translucent panel with controls, a color legend and the cube state"""
-        facelets = facelets or {}
+        status = status or {}
+        facelets = status.get('facelets') or {}
+        edit_mode = status.get('edit_mode', False)
+        palette = status.get('palette') or []
+        selected = status.get('selected_color')
+
         x, y, w, pad, lh = (self._PANEL_X, self._PANEL_Y, self._PANEL_W,
                             self._PAD, self._LINE_H)
         net_h = 3 * self._NET_CELL * 3 + 2 * self._NET_FACE_GAP
+        edit_h = (self._GAP + self._SWATCH + lh) if edit_mode else 0
         panel_h = (self._TITLE_H + 10 + self._HEADER_H + len(self._CONTROLS) * lh
                    + 2 * self._GAP + self._HEADER_H + len(self._LEGEND) * lh
-                   + 2 * self._GAP + self._HEADER_H + net_h + pad)
+                   + 2 * self._GAP + self._HEADER_H + net_h + edit_h + pad)
 
         # Panel background and title bar
         self._draw_rect(x, y, w, panel_h, (0.09, 0.09, 0.13, 0.82))
@@ -400,10 +418,43 @@ class OpenGLRenderer:
         cy += self._GAP
         self._draw_rect(x + pad, cy, w - 2 * pad, 1, (1.0, 1.0, 1.0, 0.12))
         cy += self._GAP
-        self._render_text("CUBE STATE", x + pad, cy, self.small_font, (120, 160, 220))
+        header = "PAINT (click color, then cell)" if edit_mode else "CUBE STATE"
+        self._render_text(header, x + pad, cy, self.small_font, (120, 160, 220))
         cy += self._HEADER_H
         net_w = 4 * (3 * self._NET_CELL + self._NET_FACE_GAP) - self._NET_FACE_GAP
         self._draw_cube_net(facelets, x + (w - net_w) // 2, cy)
+
+        # Palette of paint colors (edit mode only)
+        if edit_mode:
+            cy += net_h + self._GAP
+            self._draw_palette(palette, selected, x + pad, cy)
+
+    def _draw_palette(self, palette, selected, ox: int, oy: int):
+        """Row of clickable color swatches; the selected one is outlined"""
+        sw, gap = self._SWATCH, self._SWATCH_GAP
+        for i, color in enumerate(palette):
+            px = ox + i * (sw + gap)
+            if color == selected:
+                self._draw_rect(px - 2, oy - 2, sw + 4, sw + 4, (1, 1, 1, 0.95))
+            r, g, b = self._hex_to_rgb(color)
+            self._draw_rect(px, oy, sw, sw, (r, g, b, 1.0))
+            self._palette_rects[color] = (px, oy, sw, sw)
+
+    def cell_at(self, pos):
+        """Net facelet (face, row, col) under a screen point, or None"""
+        px, py = pos
+        for key, (rx, ry, rw, rh) in self._net_cell_rects.items():
+            if rx <= px < rx + rw and ry <= py < ry + rh:
+                return key
+        return None
+
+    def palette_color_at(self, pos):
+        """Palette color (hex) under a screen point, or None"""
+        px, py = pos
+        for color, (rx, ry, rw, rh) in self._palette_rects.items():
+            if rx <= px < rx + rw and ry <= py < ry + rh:
+                return color
+        return None
 
     def _draw_cube_net(self, facelets: dict, ox: int, oy: int):
         """Draw the six faces as an unfolded cross of 3x3 colored cells"""
@@ -422,8 +473,10 @@ class OpenGLRenderer:
             for row in range(3):
                 for col in range(3):
                     r, g, b = self._hex_to_rgb(grid[row][col])
-                    self._draw_rect(fx + col * cell + 1, fy + row * cell + 1,
-                                    cell - 2, cell - 2, (r, g, b, 1.0))
+                    cx, cy = fx + col * cell, fy + row * cell
+                    self._draw_rect(cx + 1, cy + 1, cell - 2, cell - 2,
+                                    (r, g, b, 1.0))
+                    self._net_cell_rects[(name, row, col)] = (cx, cy, cell, cell)
 
     def _draw_status_bar(self, status: dict):
         """Bottom bar with live FPS, move count, last move and solved state"""
@@ -441,9 +494,14 @@ class OpenGLRenderer:
         info = f"FPS {fps:3.0f}     Moves {moves}     Last: {last_move}"
         self._render_text(info, 16, ty, self.font, (210, 210, 210))
 
-        state = "SOLVED" if solved else "SCRAMBLED"
-        color = (90, 220, 120) if solved else (255, 170, 70)
-        self._render_text(state, self.width - 130, ty, self.font, color)
+        if status.get('edit_mode'):
+            valid = status.get('valid', True)
+            state = "EDIT - VALID" if valid else "EDIT - INVALID"
+            color = (120, 200, 255) if valid else (255, 110, 110)
+        else:
+            state = "SOLVED" if solved else "SCRAMBLED"
+            color = (90, 220, 120) if solved else (255, 170, 70)
+        self._render_text(state, self.width - 170, ty, self.font, color)
 
     def _render_text(self, text: str, x: int, y: int, font, color):
         """Render text using pygame font"""
