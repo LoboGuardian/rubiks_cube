@@ -65,10 +65,14 @@ class OpenGLRenderer:
         glEnable(GL_DEPTH_TEST)
         glDepthFunc(GL_LESS)
 
-        # Enable face culling
+        # Enable face culling. The piece faces in _draw_cube_piece are wound
+        # so their geometric normal points inward, i.e. clockwise when viewed
+        # from outside the cube. Front faces must therefore be GL_CW; with
+        # GL_CCW the outer colored stickers are treated as back faces and
+        # culled, leaving only the interior black faces visible.
         glEnable(GL_CULL_FACE)
         glCullFace(GL_BACK)
-        glFrontFace(GL_CCW)
+        glFrontFace(GL_CW)
 
         # Enable smooth shading
         glShadeModel(GL_SMOOTH)
